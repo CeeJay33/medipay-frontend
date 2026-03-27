@@ -301,7 +301,7 @@ const handleRegister = async () => {
     }
   } catch (err: any) {
     error.value =
-      err?.data?.message || err?.data?.error || err?.message || 'Registration failed. Please try again.'
+      err?.data?.error?.message || err?.data?.message || err?.message || 'Registration failed. Please try again.'
   } finally {
     loading.value = false
   }

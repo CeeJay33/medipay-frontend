@@ -182,7 +182,7 @@ const handleLogin = async () => {
       error.value = res.message || 'Login failed.'
     }
   } catch (err: any) {
-    error.value = err?.data?.message || err?.data?.error || err?.message || 'Login failed. Please try again.'
+    error.value = err?.data?.error?.message || err?.data?.message || err?.message || 'Login failed. Please try again.'
   } finally {
     loading.value = false
   }
