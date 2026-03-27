@@ -142,18 +142,58 @@ const payError = ref('')
 const paySuccess = ref('')
 const payForm = reactive({ payerName: '', payerEmail: '' })
 
-onMounted(async () => {
+const fetchInvoice = async () => {
   try {
     const res: any = await $fetch(`${config.public.apiBase}/api/v1/invoices/share/${shareToken}`)
     if (res.success) invoice.value = res.data
     else loadError.value = 'Invoice not found.'
   } catch (e: any) { loadError.value = e?.data?.error?.message || 'Invoice not found or has expired.' }
   finally { loading.value = false }
+}
+
+onMounted(async () => {
+  await fetchInvoice()
+
+  // Check if returning from payment gateway callback
+  const status = route.query.status
+  if (status === 'success' && invoice.value) {
+    paySuccess.value = 'Payment completed! Updating invoice status...'
+    // Re-fetch to get updated status
+    setTimeout(async () => {
+      await fetchInvoice()
+      if (invoice.value?.status === 'paid') {
+        paySuccess.value = 'Payment confirmed! The provider has been notified.'
+      }
+    }, 2000)
+  }
+
+  // Listen for real-time payment events via SSE
+  if (invoice.value && invoice.value.status === 'open') {
+    try {
+      const evtSource = new EventSource(`${config.public.apiBase}/api/v1/events/${shareToken}`)
+      evtSource.addEventListener('payment', (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          if (data.status === 'paid') {
+            invoice.value.status = 'paid'
+            paySuccess.value = 'Payment confirmed! The provider is being settled.'
+            evtSource.close()
+          }
+        } catch {}
+      })
+      evtSource.onerror = () => { evtSource.close() }
+      // Clean up on unmount
+      onUnmounted(() => evtSource.close())
+    } catch {}
+  }
 })
 
 const handlePay = async () => {
   payError.value = ''; paying.value = true
   try {
+    // Build clean callback URL (without existing query params)
+    const callbackUrl = `${window.location.origin}/pay/${shareToken}?status=success`
+
     const res: any = await $fetch(`${config.public.apiBase}/api/v1/payments/initiate`, {
       method: 'POST',
       body: {
@@ -164,12 +204,22 @@ const handlePay = async () => {
         payerEmail: payForm.payerEmail,
         paymentMethod: payMethod.value,
         processor: payMethod.value === 'card' ? 'paystack' : 'interswitch',
-        callbackUrl: window.location.href + '?status=success',
+        callbackUrl,
       },
     })
     if (res.success) {
-      if (res.data.checkout?.paymentUrl) window.location.href = res.data.checkout.paymentUrl
-      else paySuccess.value = res.data.checkout?.message || 'Payment initiated successfully.'
+      if (res.data.checkout?.paymentUrl) {
+        window.location.href = res.data.checkout.paymentUrl
+      } else {
+        paySuccess.value = res.data.checkout?.message || 'Payment initiated successfully.'
+        // Re-fetch invoice after short delay to check updated status
+        setTimeout(async () => {
+          await fetchInvoice()
+          if (invoice.value?.status === 'paid') {
+            paySuccess.value = 'Payment confirmed! The provider has been notified.'
+          }
+        }, 3000)
+      }
     } else payError.value = res.error?.message || 'Payment failed.'
   } catch (e: any) { payError.value = e?.data?.error?.message || e?.message || 'Payment failed.' }
   finally { paying.value = false }

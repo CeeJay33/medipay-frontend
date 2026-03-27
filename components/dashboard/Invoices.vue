@@ -63,7 +63,7 @@
               <td class="px-6 py-4 text-right">
                 <div class="flex items-center justify-end gap-3">
                   <button @click="viewInvoice(inv)" class="text-xs font-bold text-primary underline underline-offset-4">View</button>
-                  <button v-if="inv.shareUrl" @click="copy(inv.shareUrl)" class="p-1.5 hover:bg-surface-container rounded-full text-outline hover:text-primary transition-all"><span class="material-symbols-outlined text-[20px]">share</span></button>
+                  <button v-if="inv.shareToken" @click="copy(inv)" class="p-1.5 hover:bg-surface-container rounded-full text-outline hover:text-primary transition-all"><span class="material-symbols-outlined text-[20px]">share</span></button>
                 </div>
               </td>
             </tr>
@@ -194,16 +194,16 @@
           </div>
 
           <!-- Share Link -->
-          <div v-if="viewing.shareUrl" class="mb-6">
+          <div v-if="viewing.shareToken" class="mb-6">
             <label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Payment Link</label>
             <div class="flex gap-2">
               <div class="flex-1 h-10 bg-surface-container-low rounded-lg border border-outline-variant/20 px-3 flex items-center overflow-hidden">
-                <span class="text-xs text-on-surface-variant truncate">{{ viewing.shareUrl }}</span>
+                <span class="text-xs text-on-surface-variant truncate">{{ getShareUrl(viewing) }}</span>
               </div>
-              <button @click="copy(viewing.shareUrl)" class="px-4 bg-primary text-white rounded-lg font-bold text-xs shrink-0">Copy</button>
+              <button @click="copy(viewing)" class="px-4 bg-primary text-white rounded-lg font-bold text-xs shrink-0">Copy</button>
             </div>
             <div class="mt-3 flex gap-2">
-              <button @click="shareWhatsApp(viewing.shareUrl)" class="flex items-center gap-1.5 px-4 py-2 rounded-full border border-outline-variant/20 hover:bg-surface-container-low text-sm font-bold"><span class="material-symbols-outlined text-green-600 text-lg">chat</span> WhatsApp</button>
+              <button @click="shareWhatsApp(viewing)" class="flex items-center gap-1.5 px-4 py-2 rounded-full border border-outline-variant/20 hover:bg-surface-container-low text-sm font-bold"><span class="material-symbols-outlined text-green-600 text-lg">chat</span> WhatsApp</button>
               <button @click="shareEmail(viewing)" class="flex items-center gap-1.5 px-4 py-2 rounded-full border border-outline-variant/20 hover:bg-surface-container-low text-sm font-bold"><span class="material-symbols-outlined text-orange-500 text-lg">mail</span> Email</button>
             </div>
           </div>
@@ -357,9 +357,14 @@ const handleCancel = async () => {
 }
 
 // === Helpers ===
-const copy = (url: string) => navigator.clipboard.writeText(url)
-const shareWhatsApp = (url: string) => window.open(`https://wa.me/?text=${encodeURIComponent('Pay my medical invoice: ' + url)}`, '_blank')
-const shareEmail = (inv: any) => window.open(`mailto:?subject=MediPay Invoice ${inv.invoiceNumber}&body=Please pay my medical invoice: ${inv.shareUrl}`, '_blank')
+// Build share URL using current origin instead of backend hardcoded domain
+const getShareUrl = (inv: any) => {
+  if (!inv.shareToken) return ''
+  return `${window.location.origin}/pay/${inv.shareToken}`
+}
+const copy = (inv: any) => navigator.clipboard.writeText(getShareUrl(inv))
+const shareWhatsApp = (inv: any) => window.open(`https://wa.me/?text=${encodeURIComponent('Pay my medical invoice: ' + getShareUrl(inv))}`, '_blank')
+const shareEmail = (inv: any) => window.open(`mailto:?subject=MediPay Invoice ${inv.invoiceNumber}&body=Please pay my medical invoice: ${getShareUrl(inv)}`, '_blank')
 const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-NG', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 const stCls = (s: string) => {
   if (s === 'paid' || s === 'settled') return 'bg-secondary/10 text-secondary'
